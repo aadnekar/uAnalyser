@@ -111,8 +111,8 @@ if __name__ == "__main__":
             #     if prev_pins and prev_pins[5] == "1":
             #         ms_pin5 += TIME_DELTA
 
-            if pins[6] == "1":
-                # Pin 6 is high
+            if pins[6] == "1" and pins[4] != "1":
+                # During "sleep"
                 current_current = float(measure[1])
                 if current_current > MAX_SLEEP_CURRENT:
                     current_pin6 += current_current
