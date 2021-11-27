@@ -49,27 +49,21 @@ if __name__ == "__main__":
         file = open(file_path, "r")
 
         # Track the total current drawn for each section
-        current_before = 0
-        current_after = 0
-        current_pin4 = 0
-        # current_pin5 = 0
-        current_pin6 = 0
+        current_startup = 0
+        current_simulated_activity = 0
+        current_system_activity = 0
         current_sleep = 0
 
         # Track the number of measurements for each section
-        counter_before = 0
-        counter_after = 0
-        counter_pin4 = 0
-        # counter_pin5 = 0
-        counter_pin6 = 0
+        counter_startup = 0
+        counter_simulated_activity = 0
+        counter_system_activity = 0
         counter_sleep = 0
 
         # Track the total time of each section
-        ms_before = 0
-        ms_after = 0
-        ms_pin4 = 0
-        # ms_pin5 = 0
-        ms_pin6 = 0
+        ms_startup = 0
+        ms_simulated_activity = 0
+        ms_system_activity = 0
         ms_sleep = 0
 
         # Header line
@@ -84,25 +78,24 @@ if __name__ == "__main__":
 
             if pins[3:7] == "1000":
                 # Pin 3 is high
-                if current_pin4 > 0:
-                    # It's after the main iteration
-                    current_after += float(measure[1])
-                    counter_after += 1
+                if not (
+                    counter_simulated_activity > 0
+                    or counter_system_activity > 0
+                    or counter_sleep > 0
+                ):
+                    # It's before the main iteration
+                    current_startup += float(measure[1])
+                    counter_startup += 1
                     if prev_pins and prev_pins[3] == "1":
-                        ms_after += TIME_DELTA
-                else:
-                    current_before += float(measure[1])
-                    counter_before += 1
-                    if prev_pins and prev_pins[3] == "1":
-                        ms_before += TIME_DELTA
+                        ms_startup += TIME_DELTA
 
             if pins[4] == "1":
                 # Pin 4 is high
-                current_pin4 += float(measure[1])
-                counter_pin4 += 1
+                current_simulated_activity += float(measure[1])
+                counter_simulated_activity += 1
                 # Conditional
                 if prev_pins and prev_pins[4] == "1":
-                    ms_pin4 += TIME_DELTA
+                    ms_simulated_activity += TIME_DELTA
 
             # if pins[5] == "1":
             #     # Pin 5 is high
@@ -115,20 +108,22 @@ if __name__ == "__main__":
                 # During "sleep"
                 current_current = float(measure[1])
                 if current_current > MAX_SLEEP_CURRENT:
-                    current_pin6 += current_current
-                    counter_pin6 += 1
+                    current_system_activity += current_current
+                    counter_system_activity += 1
                     if (
                         prev_pins
                         and prev_pins[6] == "1"
+                        and prev_pins[4] == "0"
                         and float(prev_measure[1]) > MAX_SLEEP_CURRENT
                     ):
-                        ms_pin6 += TIME_DELTA
+                        ms_system_activity += TIME_DELTA
                 else:
                     current_sleep += current_current
                     counter_sleep += 1
                     if (
                         prev_pins
                         and prev_pins[6] == "1"
+                        and prev_pins[4] == "0"
                         and float(prev_measure[1]) <= MAX_SLEEP_CURRENT
                     ):
                         ms_sleep += TIME_DELTA
@@ -148,11 +143,9 @@ if __name__ == "__main__":
                 out_file = open(args.output, "a")
 
         output_line = (
-            f"{file_path},before,{round(current_before/counter_before, 3)},{round(ms_before, 3)}\n"
-            f"{file_path},after,{round(current_after/counter_after, 3)},{round(ms_after, 3)}\n"
-            f"{file_path},pin4,{round(current_pin4/counter_pin4, 3)},{round(ms_pin4, 3)}\n"
-            # f"{file_path},pin5,{round(current_pin5/counter_pin5, 3)},{round(ms_pin5, 3)}\n"
-            f"{file_path},pin6,{round(current_pin6/counter_pin6, 3)},{round(ms_pin6, 3)}\n"
+            f"{file_path},startup,{round(current_startup/counter_startup, 3)},{round(ms_startup, 3)}\n"
+            f"{file_path},simulated_activity,{round(current_simulated_activity/counter_simulated_activity, 3)},{round(ms_simulated_activity, 3)}\n"
+            f"{file_path},system_activity,{round(current_system_activity/counter_system_activity, 3)},{round(ms_system_activity, 3)}\n"
             f"{file_path},sleep,{round(current_sleep/counter_sleep, 3)},{round(ms_sleep, 3)}\n"
         )
 
