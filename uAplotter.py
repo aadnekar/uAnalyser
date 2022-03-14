@@ -1,12 +1,38 @@
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
-SOURCE_FILE = "./../uAnalyser/results.csv"
-# SOURCE_FILE = "./final_results9.csv"
-RESULTS_DIR = "./plots/"
+parser = argparse.ArgumentParser(
+    description="Command line tool for plotting results from uAnalyser tool, authored by Ådne Karstad @aadnekar"
+)
+
+parser.add_argument(
+    "--path",
+    nargs="+",
+    required=False,
+    help="relative path to source file to analyse. Provide several path's to compare results.",
+)
+parser.add_argument(
+    "--output",
+    "-o",
+    type=str,
+    help="file path to output file",
+)
+args = parser.parse_args()
+
+if args.path:
+    SOURCE_FILE = args.path[0]
+else:
+    SOURCE_FILE = "./results.csv"
+    # SOURCE_FILE = "./final_results9.csv"
+if args.output:
+    RESULTS_DIR = args.output
+else:
+    RESULTS_DIR = "./plots"
+
+
 MILLI_VOLTAGE = 3.7 * 1000
 
-POWER_CONSUMPTION = [0] * 8
 # COLORS = ["#E8A87C", "#C38D9E", "#E27D60", "#41B3A3"]
 COLORS = [
     "#39918c",
@@ -74,17 +100,17 @@ def setup_section_data(tls="on"):
     global sleep_on, sleep_off
 
     simulated_activity_on = [
-        p for p in [vals for vals in main_dict["on"]] if p[1] == "simulated_activity"
+        p for p in [vals for vals in main_dict["on"]] if p[1] == "application"
     ]
     simulated_activity_off = [
-        p for p in [vals for vals in main_dict["off"]] if p[1] == "simulated_activity"
+        p for p in [vals for vals in main_dict["off"]] if p[1] == "application"
     ]
 
     system_activity_on = [
-        p for p in [vals for vals in main_dict["on"]] if p[1] == "system_activity"
+        p for p in [vals for vals in main_dict["on"]] if p[1] == "system"
     ]
     system_activity_off = [
-        p for p in [vals for vals in main_dict["off"]] if p[1] == "system_activity"
+        p for p in [vals for vals in main_dict["off"]] if p[1] == "system"
     ]
 
     startup_on = [p for p in [vals for vals in main_dict["on"]] if p[1] == "startup"]
@@ -168,7 +194,7 @@ def plot_E_grouped(constant: str):
     width = 0.75
     x = np.arange(len(labels)) * 2
 
-    fig, ax = plt.subplots(constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
 
     ax.bar(x - width / 2, local_startup_on, width, label="Startup", color=COLORS[0])
     ax.bar(x + width / 2, local_startup_off, width, color=COLORS[0])
@@ -177,7 +203,7 @@ def plot_E_grouped(constant: str):
         x - width / 2,
         local_simulated_activity_on,
         width,
-        label="Simulated activity",
+        label="Application",
         color=COLORS[1],
         bottom=local_startup_on,
     )
@@ -194,7 +220,7 @@ def plot_E_grouped(constant: str):
         x - width / 2,
         local_system_activity_on,
         width,
-        label="System activity",
+        label="System",
         color=COLORS[2],
         bottom=[a + b for a, b in zip(local_startup_on, local_simulated_activity_on)],
     )
@@ -243,7 +269,7 @@ def plot_E_grouped(constant: str):
     print(x_coords)
 
     ax.set_xticks(x_coords)
-    plt.xticks(rotation=-60)
+    plt.xticks(rotation=90)
 
     x_labels = []
     for l in labels:
@@ -260,7 +286,7 @@ def plot_E_grouped(constant: str):
     ax.legend(bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=2)
 
     plt.savefig(
-        f"./../specialization_project/resources/grouped_{constant}.png",
+        f"{RESULTS_DIR}/grouped_{constant}.png",
         transparent=True,
         orientation="portrait",
     )
@@ -305,7 +331,7 @@ def plot_time_grouped(constant: str):
     x = np.arange(len(labels)) * 2
     print(x)
 
-    fig, ax = plt.subplots(constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
 
     ax.bar(x - width / 2, local_startup_on, width, label="Startup", color=COLORS[0])
     ax.bar(x + width / 2, local_startup_off, width, color=COLORS[0])
@@ -314,7 +340,7 @@ def plot_time_grouped(constant: str):
         x - width / 2,
         local_simulated_activity_on,
         width,
-        label="Simulated activity",
+        label="Application",
         color=COLORS[1],
         bottom=local_startup_on,
     )
@@ -331,7 +357,7 @@ def plot_time_grouped(constant: str):
         x - width / 2,
         local_system_activity_on,
         width,
-        label="System activity",
+        label="System",
         color=COLORS[2],
         bottom=[a + b for a, b in zip(local_startup_on, local_simulated_activity_on)],
     )
@@ -380,7 +406,7 @@ def plot_time_grouped(constant: str):
     print(x_coords)
 
     ax.set_xticks(x_coords)
-    plt.xticks(rotation=-60)
+    plt.xticks(rotation=90)
 
     x_labels = []
     for l in labels:
@@ -397,7 +423,7 @@ def plot_time_grouped(constant: str):
     ax.legend(bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=2)
 
     plt.savefig(
-        f"./../specialization_project/resources/grouped_time_{constant}.png",
+        f"{RESULTS_DIR}/grouped_time_{constant}.png",
         transparent=True,
         orientation="portrait",
     )
@@ -438,33 +464,36 @@ def plot_normalised_Energy_consumption(index: int, constant: str):
         local_idle_off[index] / local_idle_on[index],
     ]
 
-    labels = ["Startup", "Simulated activity", "System activity", "idle"]
+    labels = ["Startup", "Application", "System", "idle"]
 
     width = 0.75
     x = np.arange(len(normalized_on)) * 2
 
-    fig, ax = plt.subplots(constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
+    plt.rcParams.update({"font.size": 11})
 
     ax.bar(
         x - width / 2,
         normalized_on,
         width,
-        label="Normalized with TLS on",
+        label="TLS",
         color=COLORS[0],
     )
     ax.bar(
         x + width / 2,
         normalized_off,
         width,
-        label="Normalized with TLS off",
+        label="NoTLS",
         color=COLORS[2],
     )
 
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
-    plt.xticks(rotation=-45)
+    plt.xticks(rotation=90)
 
-    ax.legend(bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=1)
+    ax.legend(bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=2)
+
+    ax.set_ylabel("Normalized Energy")
 
     file_name_constant = [
         get_label(tls_on, constant, elem[0])
@@ -476,21 +505,44 @@ def plot_normalised_Energy_consumption(index: int, constant: str):
     ][index]
 
     plt.savefig(
-        f"./../specialization_project/resources/normalized_{file_name_constant}.png",
+        f"{RESULTS_DIR}/normalized_{file_name_constant}.png",
         transparent=True,
         orientation="portrait",
     )
 
 
+def profile_plot(filename: str):
+    time = []
+    current = []
+
+    for index, measure in enumerate(open(filename, "r")):
+        if index == 0:
+            continue
+
+        measure = measure[0 : -len("\n")].split(",")
+        if measure[2][3] == "1":
+            time.append(float(measure[0]))
+            current.append(float(measure[1]))
+
+    fig, ax = plt.subplots(figsize=(4, 3))
+
+    ax.plot(time, current)
+
+    plt.savefig(f"./power_profile_plots/1.png")
+
+
 if __name__ == "__main__":
 
-    readfile(SOURCE_FILE)
-    setup_section_data()
+    if args.path:
+        profile_plot(SOURCE_FILE)
+        # print(SOURCE_FILE)
+    else:
+        readfile(SOURCE_FILE)
+        setup_section_data()
+        for constant in ["1000I", "3000B"]:
+            plot_E_grouped(constant)
+            plot_time_grouped(constant)
 
-    for constant in ["1000I", "3000B"]:
-        plot_E_grouped(constant)
-        plot_time_grouped(constant)
-
-    for constant in ["1000I", "3000B"]:
-        for index in range(3):
-            plot_normalised_Energy_consumption(index=index, constant=constant)
+        for constant in ["1000I", "3000B"]:
+            for index in range(3):
+                plot_normalised_Energy_consumption(index=index, constant=constant)
