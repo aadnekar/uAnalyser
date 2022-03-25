@@ -327,8 +327,8 @@ def plot_time_grouped(constant: str):
     ]
 
     # Startplotting
-    width = 0.75
-    x = np.arange(len(labels)) * 2
+    width = 0.5
+    x = np.arange(len(labels))
     print(x)
 
     fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
@@ -467,7 +467,7 @@ def plot_normalised_Energy_consumption(index: int, constant: str):
     labels = ["Startup", "Application", "System", "idle"]
 
     width = 0.75
-    x = np.arange(len(normalized_on)) * 2
+    x = np.arange(len(normalized_on))
 
     fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
     plt.rcParams.update({"font.size": 11})

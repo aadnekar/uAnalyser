@@ -4,9 +4,11 @@ Used in collaboration with Nordic Semiconductor and NTNU
 """
 
 import argparse
+from math import sqrt
 import os
 import sys
 from colored import fg
+from enum import Enum
 
 SUCCESS_COLOR = fg('green')
 ERROR_COLOR = fg('red')
@@ -34,18 +36,30 @@ args = parser.parse_args()
 # Intuitive choice, not generic in other cases
 MAX_SLEEP_CURRENT = 20000
 
+SLEEP_THRESHOLD = 9
+
 PIN_MODEM       = 0
 APP_STATE_PINS  = [1, 5]
 PIN_MAIN        = 5
 PIN_GENERAL_1   = 6
 PIN_GENERAL_2   = 7
 
+
+class SECTION(Enum):
+    SETUP   = 0
+    COMPUTE = 1
+    SEND    = 2
+    SLEEP   = 3
+    SYSTEM  = 4
+    MODEM   = 5
+
+
 RUNNING    = 'RUNNING'
 FINISHED   = 'FINISHED'
-SETUP     = 'SETUP'
-COMPUTE   = 'COMPUTE'
-SEND      = 'SEND'
-SLEEP     = 'SLEEP'
+SETUP      = 'SETUP'
+COMPUTE    = 'COMPUTE'
+SEND       = 'SEND'
+SLEEP      = 'SLEEP'
 
 APP_STATE = {
     RUNNING:  '0010',
@@ -128,22 +142,23 @@ def MAIN():
         
         # [current, counter, time]
         
-        SYSTEM_INDEX_CURRENT = 0
-        SYSTEM_INDEX_COUNT   = 1
-        SYSTEM_INDEX_TIME    = 0
+        # SYSTEM_INDEX_CURRENT = 0
+        # SYSTEM_INDEX_COUNT   = 1
+        # SYSTEM_INDEX_TIME    = 0
         
-        system_values = {
-            10:     [0]*3,
-            20:     [0]*3,
-            40:     [0]*3,
-            80:     [0]*3,
-            160:    [0]*3,
-        }
+        # system_values = {
+        #     10:     [0]*3,
+        #     20:     [0]*3,
+        #     40:     [0]*3,
+        #     80:     [0]*3,
+        #     160:    [0]*3,
+        # }
 
         # Header line
         print(file.readline())
 
         # Initial measure
+        previous_section = None
         previous_timestamp = None
         previous_current = None
         previous_pins = None
@@ -158,7 +173,6 @@ def MAIN():
                 counter_total   += 1
                 current_total   += current
                 
-                
                 if previous_timestamp is not None:
                     time_delta = timestamp - previous_timestamp
                     time_total += time_delta
@@ -166,15 +180,12 @@ def MAIN():
                     time_delta = 0
                 
                 ###### One of the coming to count ######
-                if pins[PIN_MODEM] == '1':
-                    current_modem   += current
-                    counter_modem   += 1
-                    time_modem      += time_delta
-                
                 if state == APP_STATE[SETUP]:
                     current_setup   += current
                     counter_setup   += 1
-                    time_setup      += time_delta
+                    if previous_section == SECTION.SETUP:
+                        time_setup      += time_delta
+                    previous_section = SECTION.SETUP
                 
                 elif state == APP_STATE[SEND]:
                     current_send   += current
@@ -184,25 +195,43 @@ def MAIN():
                 elif state == APP_STATE[COMPUTE]:
                     current_compute   += current
                     counter_compute   += 1
-                    time_compute      += time_delta
+                    if previous_section == SECTION.COMPUTE:
+                        time_compute += time_delta
+                    previous_section = SECTION.COMPUTE
                 
                 elif state == APP_STATE[SLEEP]:
-                    current_sleep   += current
-                    counter_sleep   += 1
-                    time_sleep      += time_delta
+                    if pins[PIN_MODEM] == '1':
+                        current_modem   += current
+                        counter_modem   += 1
+                        if previous_section == SECTION.MODEM:
+                            time_modem += time_delta
+                        previous_section = SECTION.MODEM
                     
-                    for key in system_values.keys():
-                        if current > key:
-                            system_values[key][SYSTEM_INDEX_CURRENT] += current
-                            system_values[key][SYSTEM_INDEX_COUNT] += 1
-                            system_values[key][SYSTEM_INDEX_TIME] += time_delta
-                            
+                    elif current > SLEEP_THRESHOLD:
+                        current_system += current
+                        counter_system += 1
+                        if previous_section == SECTION.SYSTEM:
+                            time_system += time_delta
+                        previous_section = SECTION.SYSTEM
+
+                    else:
+                        current_sleep   += current
+                        counter_sleep   += 1
+                        if previous_section == SECTION.SLEEP:
+                            time_sleep += time_delta
+                        previous_section = SECTION.SLEEP
+                                      
                 else:
                     print(ERROR_COLOR + f"No state matching the current state in running: state={state}, does not match any of {APP_STATE}")
                         
                 previous_timestamp = timestamp
                 previous_current = current
                 previous_pins = pins
+        
+                """
+                REMEMBER TO CHECK STATE OF LAST SAMPLE TO SEE IF STATE IS DIFFERENT OR EQUAL
+                ONLY ADD TO TOTAL TIME OF STATE IF STATE IS EQUAL TO LAST STATE...
+                """
         
         # Close the read file
         file.close()
@@ -220,13 +249,8 @@ def MAIN():
             f"{get_label_from_file_path(file_path)},send,{counter_send},{current_send/counter_send if counter_send else 0},{current_send},{time_send}\n"
             f"{get_label_from_file_path(file_path)},sleep,{counter_sleep},{current_sleep/counter_sleep if counter_sleep else 0},{current_sleep},{time_sleep}\n"
             f"{get_label_from_file_path(file_path)},modem,{counter_modem},{current_modem/counter_modem if counter_modem else 0},{current_modem},{time_modem}\n"
+            f"{get_label_from_file_path(file_path)},system,{counter_system},{current_system/counter_system if counter_system else 0},{current_system},{time_system}\n"
         )
-        
-        for threshold in system_values.keys():
-            output_line += (
-                f"{get_label_from_file_path(file_path)},system_above_{threshold}uA,{system_values[threshold][SYSTEM_INDEX_COUNT]},{system_values[threshold][SYSTEM_INDEX_CURRENT]/system_values[threshold][SYSTEM_INDEX_COUNT] if system_values[threshold][SYSTEM_INDEX_COUNT] else 0},{system_values[threshold][SYSTEM_INDEX_CURRENT]},{system_values[threshold][SYSTEM_INDEX_TIME]}\n"
-            )
-
         print(output_line)
         if args.output:
             out_file.write(output_line)
@@ -237,6 +261,67 @@ def MAIN():
         print(
             f"Completed {file_path}: {round((file_index+1)/len(files), 2) * 100}% complete"
         )
+        
+def sleep_analysis():
+    if not os.path.isfile(args.path[0]):
+        sys.exit(f"Path is not a file: {args.path[0]}")
+    
+    file = open(args.path[0], "r")
+    print(file.readline())
+    
+    total_current = 0
+    number_of_samples = 0
+    time = 0
+    
+    for line_index, line_data in enumerate(file.readlines()):
+        timestamp, current, pins = [elem for elem in line_data.split(',')[:3]]
+        app_health = pins[APP_STATE_PINS[0]:APP_STATE_PINS[1]]
+        
+        if application_is_running(app_health):
+            current = float(current) if float(current) > 0 else 0
+            timestamp = float(timestamp)
+            total_current += current
+            
+            if previous_timestamp is not None:
+                time += timestamp - previous_timestamp
+            
+            number_of_samples += 1
+            
+            previous_timestamp = timestamp
+            previous_current = current
+            previous_pins = pins
+        else:
+            previous_timestamp = None
+            previous_current = None
+    
+    average_current = total_current / number_of_samples
+    
+    file.close()
+    file = open(args.path[0], "r")
+    print(file.readline())
+    
+    sum_of_absolute_difference = 0
+    
+    for line_index, line_data in enumerate(file.readlines()):
+        timestamp, current, pins = [elem for elem in line_data.split(',')[:3]]
+        app_health = pins[APP_STATE_PINS[0]:APP_STATE_PINS[1]]
+        
+        if application_is_running(app_health):
+            current = float(current) if float(current) > 0 else 0
+            sum_of_absolute_difference += (current - average_current)**2
+            
+    
+    variance = sum_of_absolute_difference / number_of_samples
+    standard_deviation = sqrt(variance)
+    
+    out_file = open(args.output, "x")
+    
+    out_string = f"Runtime, Number of samples, Total Current, Average Current, Variance, Standard Deviation, 'x + 3*σ\n"
+    out_string += f"{time},{number_of_samples},{total_current},{average_current},{variance},{standard_deviation}, {average_current + 3*standard_deviation}\n"
+    
+    out_file.write(out_string)
+    
 
 if __name__ == "__main__":
     MAIN()
+    # sleep_analysis()
