@@ -1,4 +1,6 @@
 import argparse
+import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import chain, product
@@ -11,6 +13,12 @@ parser.add_argument(
     "--path",
     "-p",
     help="Relative path to source file",
+)
+
+parser.add_argument(
+    "--output",
+    "-o",
+    help="Relative path to output directory",
 )
 
 args = parser.parse_args()
@@ -28,12 +36,19 @@ COLORS = [
 
 MILLI_VOLTAGE = 3.7 * 1000
 
+SOURCE_DIRECTORY = "/home/aadneka/ntnu/uAnalyser"
+
 if args.path:
     SOURCE_FILE = args.path
 else:
-    SOURCE_FILE = "./results.csv"
+    SOURCE_FILE = f"/{SOURCE_DIRECTORY}/results.csv"
 
-RESULTS_DIR = "./plots"
+if args.output:
+    if not os.path.isdir(args.output):
+        os.mkdir(args.output)
+    RESULTS_DIR = args.output
+else:
+    RESULTS_DIR = f"/{SOURCE_DIRECTORY}/plots"
 
 TOTAL = "TOTAL"
 SETUP = "SETUP"
@@ -61,7 +76,7 @@ PROTOCOLS = [
 ]
 
 """ Defines sorting order for sorting values and labels by protocol"""
-PROTOCOL_SORTING_ORDER = {"no_tls": 1, "tls": 2, "no_tls_e2e": 3, "tls_e2e": 4}
+PROTOCOL_SORTING_ORDER = {"no_tls": 1, "no_tls_e2e": 2, "tls": 3, "tls_e2e": 4}
 
 OPERATIONS = ["10", "15", "20", "25"]
 
@@ -84,6 +99,19 @@ TOTAL_CURRENT = "TOTAL_CURRENT"
 TIME = "TIME"
 
 DATA_INDEX = {COUNT: 0, AVERAGE_CURRENT: 1, TOTAL_CURRENT: 2, TIME: 3}
+
+
+def GET_SECTION_FILTER(section: str):
+    # return section == SECTIONS[TOTAL]
+    # return section != SECTIONS[SLEEP] and section != SECTIONS[SEND]
+    # return section != SECTIONS[COMPUTE] and section != SECTIONS[SEND] and section != SECTIONS[SLEEP]
+    # return section != SECTIONS[SETUP]
+    return section != SECTIONS[MODEM]
+
+
+
+def util_find_corresponding_protocol_label(label: str):
+    return "_".join(label.split("_")[:-2])
 
 
 def parse_file_data_to_dictionary():
@@ -135,10 +163,27 @@ def util_is_tls_label(label_snippet):
 
 
 def util_sorter(label_list):
-    protocol_value = PROTOCOL_SORTING_ORDER["_".join(label_list[:-2])]
+    protocol_value = (
+        PROTOCOL_SORTING_ORDER["_".join(label_list[:-2])] if len(label_list) > 2 else 0
+    )
     operations = int(label_list[-2])
     payload = int(label_list[-1][:-1])
     return (operations, payload, protocol_value)
+
+
+def util_get_joules(average_I: float, duration: float):
+    """Calculate joules based of average current drawn and the duration
+
+    Args:
+        average_I (float): Average current draw
+        duration (float): Time period of the average_I
+
+    Returns:
+        float: estimated Joules used for a period of time
+    """
+    Watts = (util_from_uA_to_mA(average_I) * MILLI_VOLTAGE) / 1e6
+    Joules = (Watts * duration) / 1e3
+    return Joules
 
 
 def sort_labels(labels):
@@ -227,185 +272,6 @@ def get_average_power_of_section(data_dictionary, section):
     return sort_values_by_label(labels, data)
 
 
-def plot_total(data_dictionary):
-    labels = get_labels(data_dictionary)
-    list_of_total = get_joules_of_section(data_dictionary, SECTIONS[TOTAL])
-
-    print(labels)
-    print(list_of_total)
-
-    width = 0.75
-    x = np.arange(start=0, stop=len(data_dictionary))
-
-    fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
-
-    ax.bar(x, list_of_total, width)
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-
-    plt.show()
-
-
-def plot_joules_with_sectors_stacked_single(data_dictionary):
-    labels = get_labels(data_dictionary)
-    labels = [label[len("no_tls_") :] for _, label in enumerate(labels)]
-
-    section_labels = []
-    sections = [
-        get_joules_of_section(data_dictionary, section)
-        for section in SECTIONS.values()
-        if section != SECTIONS[TOTAL]
-    ]
-    section_labels = [label for label in SECTIONS.values() if label != SECTIONS[TOTAL]]
-
-    width = 0.5
-    x = np.arange(len(labels))
-
-    fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
-
-    accumulated = [0] * len(labels)
-
-    for index, (section, section_label) in enumerate(zip(sections, section_labels)):
-        # no_tls = [sample for index, sample in enumerate(section) if index % 2 == 0]
-        # tls = [sample for index, sample in enumerate(section) if index % 2 != 0]
-
-        ax.bar(
-            x - width / 2,
-            section,
-            width,
-            bottom=accumulated,
-            label=section_label,
-            color=COLORS[index],
-        )
-        # ax.bar(x + width / 2, tls, width, bottom=tls_accumulated, color=COLORS[index])
-
-        accumulated = [
-            accumulated + sample for accumulated, sample in zip(accumulated, section)
-        ]
-
-    ax.set_ylabel("Energy consumption (Joule)")
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.legend(bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=2)
-
-    plt.xticks(rotation=-45)
-    plt.show()
-
-
-######## ENERGY SINGLE ########
-
-
-def plot_joules_single_section_main(data_dictionary):
-    labels = get_labels(data_dictionary)
-    labels = [label[len("no_tls_") :] for _, label in enumerate(labels)]
-
-    section_labels = []
-    sections_energy = [
-        get_joules_of_section(data_dictionary, section)
-        for section in SECTIONS.values()
-        if section != SECTIONS[TOTAL]
-    ]
-    sections_power = [
-        get_average_power_of_section(data_dictionary, section)
-        for section in SECTIONS.values()
-        if section != SECTIONS[TOTAL]
-    ]
-    section_labels = [label for label in SECTIONS.values() if label != SECTIONS[TOTAL]]
-
-    for section_power, section_energy, section_label in zip(
-        sections_power, sections_energy, section_labels
-    ):
-        plot_joules_single_section_single_TLS_configuration(
-            section_label, section_energy, labels
-        )
-        plot_average_power_single_TLS_configration(section_label, section_power, labels)
-
-
-def plot_joules_single_section_single_TLS_configuration(
-    section_label, section_data, labels
-):
-    width = 1
-    x = np.arange(len(labels)) * 2
-    fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
-    ax.set_ylabel("Energy consumption (Joule)")
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    plt.xticks(rotation=-90)
-
-    ax.bar(x, section_data, width)
-
-    plt.savefig(
-        f"plots/{section_label}-energy.png",
-        transparent=False,
-        orientation="portrait",
-    )
-
-
-def plot_average_power_single_TLS_configration(section_label, section_data, labels):
-    width = 1
-    x = np.arange(len(labels)) * 2
-    fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
-    ax.set_ylabel("Average Power (Watt)")
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    plt.xticks(rotation=-90)
-
-    ax.bar(x, section_data, width)
-
-    plt.savefig(
-        f"plots/{section_label}-average-power.png",
-        transparent=False,
-        orientation="portrait",
-    )
-
-
-######## ENERGY SINGLE END ########
-
-######## TIME SINGLE ########
-
-
-def plot_time_single_section_main(data_dictionary):
-    labels = get_labels(data_dictionary)
-    labels = [label[len("no_tls_") :] for _, label in enumerate(labels)]
-
-    section_labels = []
-    sections = [
-        get_time_of_section(data_dictionary, section)
-        for section in SECTIONS.values()
-        if section != SECTIONS[TOTAL]
-    ]
-    section_labels = [label for label in SECTIONS.values() if label != SECTIONS[TOTAL]]
-
-    for section_data, section_label in zip(sections, section_labels):
-        plot_time_single_section_single_TLS_configuration(
-            section_label, section_data, labels
-        )
-
-
-def plot_time_single_section_single_TLS_configuration(
-    section_label, section_data, labels
-):
-    width = 1
-    x = np.arange(len(labels)) * 2
-    fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
-    ax.set_ylabel("Time (Seconds)")
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    plt.xticks(rotation=-90)
-
-    ax.bar(x, section_data, width)
-
-    plt.savefig(
-        f"plots/{section_label}-time.png",
-        transparent=False,
-        orientation="portrait",
-    )
-
-
-######## TIME SINGLE END ########
-
-
 def util_filter_labels(labels, filters: list):
     return [
         label
@@ -425,7 +291,15 @@ def plot_joules_with_sectors_stacked(data_dictionary):
         x_labels = list(
             chain.from_iterable(
                 [
-                    ("no tls", "tls", f"\n{label}", "no tls e2e", "tls e2e")
+                    (
+                        "no e2e",
+                        "\nno tls",
+                        "e2e",
+                        f"\n\n{label.split(' ')[-1]}",
+                        "no e2e",
+                        "\ntls",
+                        "e2e",
+                    )
                     for label in labels
                 ]
             )
@@ -438,9 +312,11 @@ def plot_joules_with_sectors_stacked(data_dictionary):
                 [
                     (
                         i - width - width / 2,
+                        i - width,
                         i - width / 2,
                         i,
                         i + width / 2,
+                        i + width,
                         i + width + width / 2,
                     )
                     for i in x
@@ -454,8 +330,7 @@ def plot_joules_with_sectors_stacked(data_dictionary):
         no_tls_e2e_accumulated = [0] * len(labels)
         tls_e2e_accumulated = [0] * len(labels)
         for index, section in enumerate(SECTIONS.values()):
-            # if section == SECTIONS[TOTAL] or section == SECTIONS[SETUP]:
-            if section != SECTIONS[COMPUTE]:
+            if GET_SECTION_FILTER(section):
                 continue
 
             joules = get_joules_of_section(
@@ -518,12 +393,17 @@ def plot_joules_with_sectors_stacked(data_dictionary):
 
         ax.set_ylabel("Energy consumption (Joule)")
         plt.xticks(xticks, x_labels)
-        # plt.xticks(rotation=-45)
 
-        ax.legend(bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=2)
+        ax_labels = ax.get_xticklabels()
+        for index in range(3, len(ax_labels), 7):
+            ax_labels[index].set_fontweight("bold")
+
+        ax.legend(
+            bbox_to_anchor=(0, 1, 0.5, 0.5), loc="lower left", mode="expand", ncol=5
+        )
 
         plt.savefig(
-            f"plots/energy_stacked_{number_of_operations}-operations.png",
+            f"{RESULTS_DIR}/energy_stacked_{number_of_operations}-operations.png",
             transparent=False,
             orientation="portrait",
         )
@@ -541,7 +421,15 @@ def plot_time_with_sectors_stacked(data_dictionary):
         x_labels = list(
             chain.from_iterable(
                 [
-                    ("no tls", "tls", f"\n{label}", "no tls e2e", "tls e2e")
+                    (
+                        "no e2e",
+                        "\nno tls",
+                        "e2e",
+                        f"\n\n{label.split(' ')[-1]}",
+                        "no e2e",
+                        "\ntls",
+                        "e2e",
+                    )
                     for label in labels
                 ]
             )
@@ -554,9 +442,11 @@ def plot_time_with_sectors_stacked(data_dictionary):
                 [
                     (
                         i - width - width / 2,
+                        i - width,
                         i - width / 2,
                         i,
                         i + width / 2,
+                        i + width,
                         i + width + width / 2,
                     )
                     for i in x
@@ -570,7 +460,7 @@ def plot_time_with_sectors_stacked(data_dictionary):
         no_tls_e2e_accumulated = [0] * len(labels)
         tls_e2e_accumulated = [0] * len(labels)
         for index, section in enumerate(SECTIONS.values()):
-            if section == SECTIONS[TOTAL]:
+            if GET_SECTION_FILTER(section):
                 continue
 
             times = get_time_of_section(
@@ -583,7 +473,7 @@ def plot_time_with_sectors_stacked(data_dictionary):
             tls_e2e_times = [value for value in times[3::4]]
 
             ax.bar(
-                x - width - width/2,
+                x - width - width / 2,
                 no_tls_times,
                 width,
                 bottom=no_tls_accumulated,
@@ -605,7 +495,7 @@ def plot_time_with_sectors_stacked(data_dictionary):
                 color=COLORS[index],
             )
             ax.bar(
-                x + width + width/2,
+                x + width + width / 2,
                 tls_e2e_times,
                 width,
                 bottom=tls_e2e_accumulated,
@@ -633,109 +523,24 @@ def plot_time_with_sectors_stacked(data_dictionary):
         plt.xticks(xticks, x_labels)
         # plt.xticks(rotation=-45)
         axXTicks = ax.get_xticks()
-        axlabels = ax.get_xticklabels()
-        for index in range(0, len(axlabels), 3):
+        ax_labels = ax.get_xticklabels()
+        for index in range(3, len(ax_labels), 7):
+            ax_labels[index].set_fontweight("bold")
             # axlabels[axlabel_index].set_rotation(45)
-            print(axXTicks[index])
-            print(axlabels[index])
+            # print(axXTicks[index])
+            # print(axlabels[index])
             # axlabels[index].major = False
             # axlabels[axlabel_index + 2].set_rotation(45)
 
-        ax.legend(bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=2)
+        ax.legend(
+            bbox_to_anchor=(0, 1, 0.5, 0.5), loc="lower left", mode="expand", ncol=5
+        )
 
         plt.savefig(
-            f"plots/time_stacked_{number_of_operations}-operations.png",
+            f"{RESULTS_DIR}/time_stacked_{number_of_operations}-operations.png",
             transparent=False,
             orientation="portrait",
         )
-
-
-def plot_time_payload_relation(data_dictionary, section):
-    """
-    Should line up and graph the difference of processing time with regards to payload size
-    """
-
-    labels = get_payload_labels(data_dictionary)
-    data = get_time_of_section(data_dictionary, section)
-
-    for sample, label in zip(data, labels):
-        print(label, "<-------->", sample)
-
-    width = 0.5
-    fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
-    x = np.arange(len(data_dictionary))
-
-    ax.bar(x, data, width)
-
-    ax.set_ylabel("Time")
-    ax.set_xlabel("Payload Size")
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    # ax.legend(bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=2)
-
-    plt.xticks(rotation=-45)
-    plt.show()
-
-
-def test_label_plotting():
-    values = [50, 40, 60, 90, 30, 60]
-    values_more = [10, 15, 10, 15, 10, 15]
-    conf = ["no_tls", "tls"]
-    payload_label = ["256B", "708B", "1024B"]
-    sections = ["Values", "More Values"]
-
-    width = 0.5
-    x = np.arange(len(values) / 2) * 2
-    spaces = list(chain.from_iterable([(i - width / 2, i, i + width / 2) for i in x]))
-
-    fig, ax = plt.subplots(figsize=(4, 3), constrained_layout=True)
-
-    values_1 = [val for val in values[0::2]]
-    values_2 = [val for val in values[1::2]]
-    more_values_1 = [val for val in values_more[0::2]]
-    more_values_2 = [val for val in values_more[1::2]]
-
-    ax.bar(x - width / 2, values_1, width, color=COLORS[0], label=sections[0])
-    ax.bar(x + width / 2, values_2, width, color=COLORS[0])
-    ax.bar(
-        x - width / 2,
-        more_values_1,
-        width,
-        bottom=values_1,
-        color=COLORS[1],
-        label=sections[1],
-    )
-    ax.bar(x + width / 2, more_values_2, width, bottom=values_2, color=COLORS[1])
-
-    x_labels = list(
-        chain.from_iterable(
-            [(conf[0], f"\n{label}", conf[1]) for label in payload_label]
-        )
-    )
-    # x_labels = [f"{conf[0]}{' '*8}{conf[1]}\n{' '*8}{label}" for label in payload_label]
-    plt.xticks(spaces, x_labels)
-    # ax.set_xticks(x)
-
-    plt.legend()
-    plt.show()
-
-
-def test_spaces():
-    width = 0.5
-    x = np.arange(3) * 2
-    print(x)
-
-    x_left = np.linspace(x[0] - width / 2, x[-1] - width / 2, len(x))
-    x_right = np.linspace(x[0] + width / 2, x[-1] + width / 2, len(x))
-
-    spaces = [(i - width / 2, i, i + width / 2) for i in x]
-    spaces2 = list(chain.from_iterable([(i - width / 2, i, i + width / 2) for i in x]))
-
-    print(spaces)
-    print(spaces2)
-
-    print(len(x))
 
 
 def log_theoretical_and_real_value_differences(data_dictionary):
@@ -752,6 +557,122 @@ def log_theoretical_and_real_value_differences(data_dictionary):
     file.close()
 
 
+def detailed_analytics(data_dictionary):
+    """
+    Verify that sum(sections) == TOTAL, in terms of both time and total current
+
+    For each setion investigate the section/total value
+
+    Also investigate the (compute + send + sleep + system)/ total compared to the setup
+    and find out how many cycles are needed to get them equal?
+    """
+
+    output_time_header = f"Configuration,sum,comp,send,sleep,system,modem,system\n"
+    output_power_header = f"Configuration,sum,comp,send,sleep,system,modem,system\n"
+
+    def get_percent(fraction, total):
+        return f"{round((fraction/total) * 100, 2)}\%"
+
+    times_grouped_by_protocol_dict = {}
+    joules_grouped_by_protocol_dict = {}
+
+    for protocol in PROTOCOLS:
+        times_grouped_by_protocol_dict[protocol] = []
+        joules_grouped_by_protocol_dict[protocol] = []
+
+    for label, sections in data_dictionary.items():
+        time_total = sections["total"][-1]
+        time_sum = sum(
+            [
+                values[-1]
+                for section, values in sections.items()
+                if section != SECTIONS[TOTAL]
+            ]
+        )
+        time_compute = sections["compute"][-1]
+        time_send = sections["send"][-1]
+        time_sleep = sections["sleep"][-1]
+        time_system = sections["system"][-1]
+        time_modem = sections["modem"][-1]
+        time_setup = sections["setup"][-1]
+        time_sections = [
+            time_sum,
+            time_compute,
+            time_send,
+            time_sleep,
+            time_system,
+            time_modem,
+            time_setup,
+        ]
+
+        joules_total = util_get_joules(sections["total"][-3], sections["total"][-1])
+        joules_sum = sum(
+            [
+                util_get_joules(values[-3], values[-1])
+                for section, values in sections.items()
+                if section != SECTIONS[TOTAL]
+            ]
+        )
+        joules_compute = util_get_joules(
+            sections["compute"][-3], sections["compute"][-1]
+        )
+        joules_send = util_get_joules(sections["send"][-3], sections["send"][-1])
+        joules_sleep = util_get_joules(sections["sleep"][-3], sections["sleep"][-1])
+        joules_system = util_get_joules(sections["system"][-3], sections["system"][-1])
+        joules_modem = util_get_joules(sections["modem"][-3], sections["modem"][-1])
+        joules_setup = util_get_joules(sections["setup"][-3], sections["setup"][-1])
+        joules_sections = [
+            joules_sum,
+            joules_compute,
+            joules_send,
+            joules_sleep,
+            joules_system,
+            joules_modem,
+            joules_setup,
+        ]
+
+        label_with_baskslash = " ".join(label.split("_")[-2:])
+
+        times_grouped_by_protocol_dict[
+            util_find_corresponding_protocol_label(label)
+        ].append(
+            f"{label_with_baskslash},"
+            + f"{','.join([get_percent(time_section, time_total) for time_section in time_sections])}"
+            + "\n"
+        )
+
+        joules_grouped_by_protocol_dict[
+            util_find_corresponding_protocol_label(label)
+        ].append(
+            f"{label_with_baskslash},"
+            + f"{','.join([get_percent(joules_section, joules_total) for joules_section in joules_sections])}"
+            + "\n"
+        )
+
+    for output_time_string_list, output_power_string_list in zip(
+        times_grouped_by_protocol_dict.values(),
+        joules_grouped_by_protocol_dict.values(),
+    ):
+        output_time_string_list.sort(
+            key=lambda o_string: util_sorter(o_string.split(",")[0].split(" "))
+        )
+        output_power_string_list.sort(
+            key=lambda o_string: util_sorter(o_string.split(",")[0].split(" "))
+        )
+
+    for protocol, output_string in joules_grouped_by_protocol_dict.items():
+        file_path = f"time_distribution_{protocol}.csv"
+        file = open(file_path, "x")
+        file.write(output_time_header + "".join(output_string))
+        file.close()
+    for protocol, output_string in joules_grouped_by_protocol_dict.items():
+        file_path = f"power_distribution_{protocol}.csv"
+        file = open(file_path, "x")
+        file.write(output_power_header + "".join(output_string))
+        file.close()
+    return
+
+
 def MAIN():
     """
     Dictionary outline:
@@ -764,21 +685,12 @@ def MAIN():
     """
     data_dictionary = parse_file_data_to_dictionary()
 
-    # plot_total(data_dictionary)
-    # plot_joules_with_sectors_stacked_single(data_dictionary)
     plot_joules_with_sectors_stacked(data_dictionary)
     plot_time_with_sectors_stacked(data_dictionary)
 
-    # plot_joules_single_section_main(data_dictionary)
-    # plot_time_single_section_main(data_dictionary)
-
-    # plot_time_payload_relation(data_dictionary, SECTIONS[SEND])
-    # plot_time_payload_relation(data_dictionary, SECTIONS[MODEM])
-
-    # test_label_plotting()
-    # test_spaces()
-
     # log_theoretical_and_real_value_differences(data_dictionary)
+
+    # detailed_analytics(data_dictionary)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,9 @@ args = parser.parse_args()
 # Intuitive choice, not generic in other cases
 MAX_SLEEP_CURRENT = 20000
 
+# 0.01 ms: 0.01 * 100.000 = 1000ms = 1s
+TIME_DELTA = 0.01
+
 SLEEP_THRESHOLD = 9
 
 PIN_MODEM       = 0
@@ -158,10 +161,10 @@ def MAIN():
         print(file.readline())
 
         # Initial measure
-        previous_section = None
-        previous_timestamp = None
-        previous_current = None
-        previous_pins = None
+        # previous_section = None
+        # previous_timestamp = None
+        # previous_current = None
+        # previous_pins = None
         for line_index, line_data in enumerate(file):
             timestamp, current, pins = [elem for elem in line_data.split(',')[:3]]
             app_health = pins[APP_STATE_PINS[0]:APP_STATE_PINS[1]]
@@ -172,61 +175,46 @@ def MAIN():
                 state           = pins[PIN_GENERAL_1: PIN_GENERAL_2 + 1]
                 counter_total   += 1
                 current_total   += current
-                
-                if previous_timestamp is not None:
-                    time_delta = timestamp - previous_timestamp
-                    time_total += time_delta
-                else:
-                    time_delta = 0
+                time_total      += TIME_DELTA
                 
                 ###### One of the coming to count ######
                 if state == APP_STATE[SETUP]:
                     current_setup   += current
                     counter_setup   += 1
-                    if previous_section == SECTION.SETUP:
-                        time_setup      += time_delta
-                    previous_section = SECTION.SETUP
+                    time_setup      += TIME_DELTA
                 
                 elif state == APP_STATE[SEND]:
                     current_send   += current
                     counter_send   += 1
-                    time_send      += time_delta
+                    time_send      += TIME_DELTA
 
                 elif state == APP_STATE[COMPUTE]:
                     current_compute   += current
                     counter_compute   += 1
-                    if previous_section == SECTION.COMPUTE:
-                        time_compute += time_delta
-                    previous_section = SECTION.COMPUTE
+                    time_compute += TIME_DELTA
                 
                 elif state == APP_STATE[SLEEP]:
                     if pins[PIN_MODEM] == '1':
                         current_modem   += current
                         counter_modem   += 1
-                        if previous_section == SECTION.MODEM:
-                            time_modem += time_delta
-                        previous_section = SECTION.MODEM
+                        time_modem += TIME_DELTA
                     
                     elif current > SLEEP_THRESHOLD:
                         current_system += current
                         counter_system += 1
-                        if previous_section == SECTION.SYSTEM:
-                            time_system += time_delta
-                        previous_section = SECTION.SYSTEM
+                        time_system += TIME_DELTA
 
                     else:
                         current_sleep   += current
                         counter_sleep   += 1
-                        if previous_section == SECTION.SLEEP:
-                            time_sleep += time_delta
-                        previous_section = SECTION.SLEEP
+                        time_sleep += TIME_DELTA
                                       
                 else:
                     print(ERROR_COLOR + f"No state matching the current state in running: state={state}, does not match any of {APP_STATE}")
                         
-                previous_timestamp = timestamp
-                previous_current = current
-                previous_pins = pins
+                # previous_timestamp = timestamp
+                # previous_current = current
+                # previous_pins = pins
         
                 """
                 REMEMBER TO CHECK STATE OF LAST SAMPLE TO SEE IF STATE IS DIFFERENT OR EQUAL
