@@ -102,12 +102,10 @@ DATA_INDEX = {COUNT: 0, AVERAGE_CURRENT: 1, TOTAL_CURRENT: 2, TIME: 3}
 
 
 def GET_SECTION_FILTER(section: str):
-    # return section == SECTIONS[TOTAL]
-    # return section != SECTIONS[SLEEP] and section != SECTIONS[SEND]
+    return section == SECTIONS[TOTAL]
+    # return section != SECTIONS[TOTAL]
     # return section != SECTIONS[COMPUTE] and section != SECTIONS[SEND] and section != SECTIONS[SLEEP]
-    # return section != SECTIONS[SETUP]
-    return section != SECTIONS[MODEM]
-
+    # return section == SECTIONS[MODEM] or section == SECTIONS[TOTAL] or section == SECTIONS[SETUP]
 
 
 def util_find_corresponding_protocol_label(label: str):
@@ -125,7 +123,7 @@ def parse_file_data_to_dictionary():
         if len(data_line) < 5:
             print(data_line)
             continue
-        label, section, count, average_current, total_current, time = data_line.split(
+        label, section, count, average_current, total_current, time, joules = data_line.split(
             ","
         )
 
@@ -137,15 +135,8 @@ def parse_file_data_to_dictionary():
             float(average_current),
             float(total_current),
             float(time),
+            float(joules),
         ]
-
-    # print("VERBIOSA START")
-    # for key, label_values in data_dictionary.items():
-    #     print("\n\n#########",key,"#########")
-    #     for section_key, section_value in label_values.items():
-    #         print("#########",section_key,"#########")
-    #         print(section_value)
-    # print("VERBIOSA END")
 
     return data_dictionary
 
@@ -245,29 +236,9 @@ def get_joules_of_section(data_dictionary, section: str, filters: list = None):
             continue
 
         labels.append(label)
-        # uA at the beginning, so average uA over all the samples
-        average_uA, _, ms = label_values[section][1:4]
-        # mA * mV = uW (divide by million to get Watt)
-        # 10^-3 * 10^-3 = 10^-6
-        Watt = (util_from_uA_to_mA(average_uA) * MILLI_VOLTAGE) / 10 ** 6
-        # Watt * ms = mJ
-        Joule = (Watt * ms) / 10 ** 3
-        data.append(Joule)
-
-    return sort_values_by_label(labels, data)
-
-
-def get_average_power_of_section(data_dictionary, section):
-    data = []
-    labels = []
-    for label, label_values in data_dictionary.items():
-        labels.append(label)
-        # uA at the beginning, so average uA over all the samples
-        average_uA, _, ms = label_values[section][1:4]
-        # mA * mV = uW (divide by million to get Watt)
-        # 10^-3 * 10^-3 = 10^-6
-        Watt = (util_from_uA_to_mA(average_uA) * MILLI_VOLTAGE) / 10 ** 6
-        data.append(Watt)
+        joules = label_values[section][4]
+        data.append(joules)
+        # print(f"Label={label} used {joules} joules")
 
     return sort_values_by_label(labels, data)
 
@@ -280,7 +251,7 @@ def util_filter_labels(labels, filters: list):
     ]
 
 
-def plot_joules_with_sectors_stacked(data_dictionary):
+def plot_joules(data_dictionary):
     all_labels = [
         " ".join(label.split(" ")[1:])
         for label in util_filter_labels(ALL_CONFIGURATION_LABELS, ["tls"])
@@ -292,13 +263,11 @@ def plot_joules_with_sectors_stacked(data_dictionary):
             chain.from_iterable(
                 [
                     (
-                        "no e2e",
-                        "\nno tls",
+                        "none",
                         "e2e",
                         f"\n\n{label.split(' ')[-1]}",
-                        "no e2e",
-                        "\ntls",
-                        "e2e",
+                        "tls",
+                        "tls_e2e",
                     )
                     for label in labels
                 ]
@@ -312,18 +281,16 @@ def plot_joules_with_sectors_stacked(data_dictionary):
                 [
                     (
                         i - width - width / 2,
-                        i - width,
                         i - width / 2,
                         i,
                         i + width / 2,
-                        i + width,
                         i + width + width / 2,
                     )
                     for i in x
                 ]
             )
         )
-        fig, ax = plt.subplots(figsize=(14, 6), constrained_layout=True)
+        fig, ax = plt.subplots(figsize=(20, 8), constrained_layout=True)
 
         no_tls_accumulated = [0] * len(labels)
         tls_accumulated = [0] * len(labels)
@@ -336,12 +303,17 @@ def plot_joules_with_sectors_stacked(data_dictionary):
             joules = get_joules_of_section(
                 data_dictionary, section, filters=[number_of_operations]
             )
+            
+            # print(f"joules: {joules}")
 
             no_tls_joules = [value for value in joules[0::4]]
             tls_joules = [value for value in joules[1::4]]
             no_tls_e2e_joules = [value for value in joules[2::4]]
             tls_e2e_joules = [value for value in joules[3::4]]
 
+            # print(f"Joules for {section} section no_tls protocol: no_tls_joules")
+            # print(no_tls_joules)
+            
             ax.bar(
                 x - width - width / 2,
                 no_tls_joules,
@@ -349,6 +321,7 @@ def plot_joules_with_sectors_stacked(data_dictionary):
                 bottom=no_tls_accumulated,
                 color=COLORS[index],
                 label=section,
+                # edgecolor="black",
             )
             ax.bar(
                 x - width / 2,
@@ -391,15 +364,52 @@ def plot_joules_with_sectors_stacked(data_dictionary):
                 for accumulated, value in zip(tls_e2e_accumulated, tls_e2e_joules)
             ]
 
+        ax.bar(
+            x - width - width / 2,
+            no_tls_accumulated,
+            width,
+            fill = False,
+            edgecolor="black",
+        )
+        ax.bar(
+            x - width / 2,
+            tls_accumulated,
+            width,
+            fill = False,
+            edgecolor="black",
+        )
+
+        ax.bar(
+            x + width / 2,
+            no_tls_e2e_accumulated,
+            width,
+            fill = False,
+            edgecolor="black",
+        )
+
+        ax.bar(
+            x + width + width / 2,
+            tls_e2e_accumulated,
+            width,
+            fill = False,
+            edgecolor="black",
+        )
+
         ax.set_ylabel("Energy consumption (Joule)")
+        y = np.linspace(start=0, stop=5.5, num=11)
+        print(y)
+        print(len(y))
+        plt.yticks(y)
+
         plt.xticks(xticks, x_labels)
 
-        ax_labels = ax.get_xticklabels()
-        for index in range(3, len(ax_labels), 7):
-            ax_labels[index].set_fontweight("bold")
+        # ax_labels = ax.get_xticklabels()
+        # for index in range(3, len(ax_labels), 7):
+        #     ax_labels[index].set_fontweight("bold")
+        print(tls_accumulated)
 
         ax.legend(
-            bbox_to_anchor=(0, 1, 0.5, 0.5), loc="lower left", mode="expand", ncol=5
+            bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=len(x_labels)
         )
 
         plt.savefig(
@@ -409,7 +419,7 @@ def plot_joules_with_sectors_stacked(data_dictionary):
         )
 
 
-def plot_time_with_sectors_stacked(data_dictionary):
+def plot_time(data_dictionary):
     all_labels = [
         " ".join(label.split(" ")[1:])
         for label in util_filter_labels(ALL_CONFIGURATION_LABELS, ["tls"])
@@ -422,13 +432,11 @@ def plot_time_with_sectors_stacked(data_dictionary):
             chain.from_iterable(
                 [
                     (
-                        "no e2e",
-                        "\nno tls",
+                        "none",
                         "e2e",
                         f"\n\n{label.split(' ')[-1]}",
-                        "no e2e",
-                        "\ntls",
-                        "e2e",
+                        "tls",
+                        "tls_e2e",
                     )
                     for label in labels
                 ]
@@ -442,11 +450,9 @@ def plot_time_with_sectors_stacked(data_dictionary):
                 [
                     (
                         i - width - width / 2,
-                        i - width,
                         i - width / 2,
                         i,
                         i + width / 2,
-                        i + width,
                         i + width + width / 2,
                     )
                     for i in x
@@ -684,9 +690,16 @@ def MAIN():
     ]
     """
     data_dictionary = parse_file_data_to_dictionary()
+    
+    plt.rc('font', size=15) #controls default text size
+    plt.rc('axes', titlesize=15) #fontsize of the title
+    plt.rc('axes', labelsize=15) #fontsize of the x and y labels
+    plt.rc('xtick', labelsize=15) #fontsize of the x tick labels
+    plt.rc('ytick', labelsize=15) #fontsize of the y tick labels
+    plt.rc('legend', fontsize=15) #fontsize of the legend
 
-    plot_joules_with_sectors_stacked(data_dictionary)
-    plot_time_with_sectors_stacked(data_dictionary)
+    plot_joules(data_dictionary)
+    plot_time(data_dictionary)
 
     # log_theoretical_and_real_value_differences(data_dictionary)
 
