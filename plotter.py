@@ -102,7 +102,7 @@ DATA_INDEX = {COUNT: 0, AVERAGE_CURRENT: 1, TOTAL_CURRENT: 2, TIME: 3}
 
 
 def GET_SECTION_FILTER(section: str):
-    return section == SECTIONS[TOTAL]
+    return section == SECTIONS[TOTAL] or section == SECTIONS[SEND]
     # return section != SECTIONS[TOTAL]
     # return section != SECTIONS[COMPUTE] and section != SECTIONS[SEND] and section != SECTIONS[SLEEP]
     # return section == SECTIONS[MODEM] or section == SECTIONS[TOTAL] or section == SECTIONS[SETUP]
@@ -267,7 +267,7 @@ def plot_joules(data_dictionary):
                         "e2e",
                         f"\n\n{label.split(' ')[-1]}",
                         "tls",
-                        "tls_e2e",
+                        "tls+",
                     )
                     for label in labels
                 ]
@@ -290,7 +290,10 @@ def plot_joules(data_dictionary):
                 ]
             )
         )
-        fig, ax = plt.subplots(figsize=(20, 8), constrained_layout=True)
+        fig, ax = plt.subplots(figsize=(5, 3), constrained_layout=True)
+        
+        y = np.linspace(start=0, stop=6, num=7)
+        plt.yticks(y)
 
         no_tls_accumulated = [0] * len(labels)
         tls_accumulated = [0] * len(labels)
@@ -321,7 +324,7 @@ def plot_joules(data_dictionary):
                 bottom=no_tls_accumulated,
                 color=COLORS[index],
                 label=section,
-                # edgecolor="black",
+                zorder=3,
             )
             ax.bar(
                 x - width / 2,
@@ -329,6 +332,7 @@ def plot_joules(data_dictionary):
                 width,
                 bottom=tls_accumulated,
                 color=COLORS[index],
+                zorder=3,
             )
 
             ax.bar(
@@ -337,6 +341,7 @@ def plot_joules(data_dictionary):
                 width,
                 bottom=no_tls_e2e_accumulated,
                 color=COLORS[index],
+                zorder=3,
             )
 
             ax.bar(
@@ -345,6 +350,7 @@ def plot_joules(data_dictionary):
                 width,
                 bottom=tls_e2e_accumulated,
                 color=COLORS[index],
+                zorder=3,
             )
 
             no_tls_accumulated = [
@@ -370,6 +376,7 @@ def plot_joules(data_dictionary):
             width,
             fill = False,
             edgecolor="black",
+            zorder=3,
         )
         ax.bar(
             x - width / 2,
@@ -377,6 +384,7 @@ def plot_joules(data_dictionary):
             width,
             fill = False,
             edgecolor="black",
+            zorder=3,
         )
 
         ax.bar(
@@ -385,6 +393,7 @@ def plot_joules(data_dictionary):
             width,
             fill = False,
             edgecolor="black",
+            zorder=3,
         )
 
         ax.bar(
@@ -393,20 +402,19 @@ def plot_joules(data_dictionary):
             width,
             fill = False,
             edgecolor="black",
+            zorder=3,
         )
 
         ax.set_ylabel("Energy consumption (Joule)")
-        y = np.linspace(start=0, stop=5.5, num=11)
-        print(y)
-        print(len(y))
-        plt.yticks(y)
-
         plt.xticks(xticks, x_labels)
+        
+        ax_labels = ax.get_xticklabels()
+        for index in range(2, len(ax_labels), 5):
+            ax_labels[index-2].set_rotation(-45)
+            ax_labels[index-1].set_rotation(-45)
+            ax_labels[index+1].set_rotation(-45)
+            ax_labels[index+2].set_rotation(-45)
 
-        # ax_labels = ax.get_xticklabels()
-        # for index in range(3, len(ax_labels), 7):
-        #     ax_labels[index].set_fontweight("bold")
-        print(tls_accumulated)
 
         ax.legend(
             bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=len(x_labels)
@@ -436,7 +444,7 @@ def plot_time(data_dictionary):
                         "e2e",
                         f"\n\n{label.split(' ')[-1]}",
                         "tls",
-                        "tls_e2e",
+                        "tls+",
                     )
                     for label in labels
                 ]
@@ -459,7 +467,12 @@ def plot_time(data_dictionary):
                 ]
             )
         )
-        fig, ax = plt.subplots(figsize=(14, 6), constrained_layout=True)
+        fig, ax = plt.subplots(figsize=(5, 3), constrained_layout=True)
+        
+        y = np.linspace(start=0, stop=400, num=5)
+        plt.yticks(y)
+        for ytick in y:
+            plt.axhline(y=ytick, color='black', linestyle='-', linewidth=0.5)
 
         no_tls_accumulated = [0] * len(labels)
         tls_accumulated = [0] * len(labels)
@@ -485,6 +498,7 @@ def plot_time(data_dictionary):
                 bottom=no_tls_accumulated,
                 color=COLORS[index],
                 label=section,
+                zorder=3,
             )
             ax.bar(
                 x - width / 2,
@@ -492,6 +506,7 @@ def plot_time(data_dictionary):
                 width,
                 bottom=tls_accumulated,
                 color=COLORS[index],
+                zorder=3,
             )
             ax.bar(
                 x + width / 2,
@@ -499,6 +514,7 @@ def plot_time(data_dictionary):
                 width,
                 bottom=no_tls_e2e_accumulated,
                 color=COLORS[index],
+                zorder=3,
             )
             ax.bar(
                 x + width + width / 2,
@@ -506,6 +522,7 @@ def plot_time(data_dictionary):
                 width,
                 bottom=tls_e2e_accumulated,
                 color=COLORS[index],
+                zorder=3,
             )
 
             no_tls_accumulated = [
@@ -524,22 +541,55 @@ def plot_time(data_dictionary):
                 accumulated + value
                 for accumulated, value in zip(tls_e2e_accumulated, tls_e2e_times)
             ]
+            
+        ax.bar(
+            x - width - width / 2,
+            no_tls_accumulated,
+            width,
+            fill = False,
+            edgecolor="black",
+            zorder=3,
+        )
+        ax.bar(
+            x - width / 2,
+            tls_accumulated,
+            width,
+            fill = False,
+            edgecolor="black",
+            zorder=3,
+        )
 
+        ax.bar(
+            x + width / 2,
+            no_tls_e2e_accumulated,
+            width,
+            fill = False,
+            edgecolor="black",
+            zorder=3,
+        )
+
+        ax.bar(
+            x + width + width / 2,
+            tls_e2e_accumulated,
+            width,
+            fill = False,
+            edgecolor="black",
+            zorder=3,
+        )
+        
         ax.set_ylabel("Time consumption (Seconds)")
+        
         plt.xticks(xticks, x_labels)
-        # plt.xticks(rotation=-45)
-        axXTicks = ax.get_xticks()
+        
         ax_labels = ax.get_xticklabels()
-        for index in range(3, len(ax_labels), 7):
-            ax_labels[index].set_fontweight("bold")
-            # axlabels[axlabel_index].set_rotation(45)
-            # print(axXTicks[index])
-            # print(axlabels[index])
-            # axlabels[index].major = False
-            # axlabels[axlabel_index + 2].set_rotation(45)
+        for index in range(2, len(ax_labels), 5):
+            ax_labels[index-2].set_rotation(-45)
+            ax_labels[index-1].set_rotation(-45)
+            ax_labels[index+1].set_rotation(-45)
+            ax_labels[index+2].set_rotation(-45)
 
         ax.legend(
-            bbox_to_anchor=(0, 1, 0.5, 0.5), loc="lower left", mode="expand", ncol=5
+            bbox_to_anchor=(0, 1, 1, 0), loc="lower left", mode="expand", ncol=len(x_labels)
         )
 
         plt.savefig(
@@ -691,12 +741,12 @@ def MAIN():
     """
     data_dictionary = parse_file_data_to_dictionary()
     
-    plt.rc('font', size=15) #controls default text size
-    plt.rc('axes', titlesize=15) #fontsize of the title
-    plt.rc('axes', labelsize=15) #fontsize of the x and y labels
-    plt.rc('xtick', labelsize=15) #fontsize of the x tick labels
-    plt.rc('ytick', labelsize=15) #fontsize of the y tick labels
-    plt.rc('legend', fontsize=15) #fontsize of the legend
+    plt.rc('font', size=9) #controls default text size
+    plt.rc('axes', titlesize=9) #fontsize of the title
+    plt.rc('axes', labelsize=9) #fontsize of the x and y labels
+    plt.rc('xtick', labelsize=9) #fontsize of the x tick labels
+    plt.rc('ytick', labelsize=9) #fontsize of the y tick labels
+    plt.rc('legend', fontsize=9) #fontsize of the legend
 
     plot_joules(data_dictionary)
     plot_time(data_dictionary)
